@@ -1,0 +1,84 @@
+# limit requests per IP per second
+limit_req_zone $binary_remote_addr zone=req_limit_per_ip:10m rate=10r/s;
+
+# redirect http to https
+server {
+        listen 80 default_server;
+        server_name <domain>;
+
+        if ($http_x_forwarded_proto != "https") {
+                return 301 https://$host$request_uri;
+        }
+}
+
+# handle https requests
+server {
+        listen 443 ssl;
+        server_name <domain>;
+
+        # ssl certificates
+        ssl_certificate </path/to/cert.pem>;
+        ssl_certificate_key </path/to/key.pem>;
+
+        # specify strong ciphers for encryption
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+        ssl_prefer_server_ciphers on;
+
+        # ssl session caching and expiration 
+        # 10m means 10MB of cache - can store thousands of sessions
+        ssl_session_cache shared:SSL:10m;
+        # 1h means 1 hour - reduce repeated handshakes; improve performance
+        ssl_session_timeout 1h;
+        
+        # enable OCSP - improve ssl certification verification speed
+        ssl_stapling on;
+        # verify OCSP response from CA is valid
+        ssl_stapling_verify on;
+
+        # security headers for known web vulnerabilities
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+        # root directory for static files 
+        root </path/to/website>;
+        index index.html;
+
+        # handle requests for static files
+        # try requested file, then folder, then fallback to index.html
+        location / {
+                try_files $uri $uri/ /index.html;
+        }
+
+        # proxy requests to backend service
+        location <route e.g. /users> {
+                # add rate limit to route location                
+                limit_req zone=req_limit_per_ip burst=20 nodelay;
+
+                # forward request to local service running in port
+                proxy_pass http://localhost:<port>;
+                proxy_http_version 1.1;
+
+                ## for websockets
+                # proxy_set_header Upgrade $http_upgrade;
+                # proxy_set_header Connection "upgrade";
+
+                ## pass Host header from client request to backend
+                # proxy_set_header Host $host;
+
+                ## send client's ip address to backend
+                # proxy_set_header X-Real-IP $remote_addr;
+
+                ## list all client IPs to preserve original source
+                # proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+                ## tell backend if request from http or https
+                # proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        access_log </path/to/nginx/logs>;
+        error_log </path/to/nginx/error_logs>;
+}
