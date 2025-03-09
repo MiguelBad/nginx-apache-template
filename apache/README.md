@@ -23,6 +23,13 @@ LoadModule php_module modules/libphp.so
 Include conf/extra/php_module.conf
 ```
 
+## .htaccess
+
+uncomment:
+```
+LoadModule rewrite_module modules/mod_rewrite.so
+```
+
 ## to create virtual hosts
 
 in /etc/httpd/conf/httpd.conf, uncomment:
